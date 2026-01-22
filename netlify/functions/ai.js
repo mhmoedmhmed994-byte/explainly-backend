@@ -1,33 +1,51 @@
-export default async (req) => {
-  const { text } = JSON.parse(req.body);
+export default async function handler(req) {
+  try {
+    if (req.method !== "POST") {
+      return new Response("Method Not Allowed", { status: 405 });
+    }
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "Summarize the text and give clear bullet points in Arabic."
-        },
-        {
-          role: "user",
-          content: text
+    const { text } = JSON.parse(req.body);
+
+    if (!text) {
+      return new Response(
+        JSON.stringify({ error: "No text provided" }),
+        { status: 400 }
+      );
+    }
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        input: `لخص النص التالي في نقاط واضحة وبالعربية:\n\n${text}`,
+        max_output_tokens: 300
+      })
+    });
+
+    const data = await response.json();
+
+    const output =
+      data.output_text ||
+      data.output?.[0]?.content?.[0]?.text ||
+      "لم يتم إنشاء ملخص";
+
+    return new Response(
+      JSON.stringify({ result: output }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json"
         }
-      ],
-      max_tokens: 300
-    })
-  });
-
-  const data = await response.json();
-  const lines = data.choices[0].message.content.split("\n").filter(Boolean);
-
-  return new Response(JSON.stringify({
-    summary: lines[0],
-    points: lines.slice(1, 5)
-  }), { status: 200 });
-};
+      }
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: err.message }),
+      { status: 500 }
+    );
+  }
+}
